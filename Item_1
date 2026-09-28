@@ -1,0 +1,99 @@
+# Resumen del Ítem 1: Cinemática directa verificada
+
+## 1. Qué pide el ítem y para qué sirve
+
+El enunciado pide tres cosas:
+
+1. Deducir la tabla Denavit-Hartenberg (DH) del JetCobot.
+2. Implementar una función `fk(q)`.
+3. Validarla contra el robot físico, con error de posición ≤ 10 mm en tres poses.
+
+La **cinemática directa (FK)** responde una pregunta: si conozco el ángulo de cada una de las 6 articulaciones, ¿dónde queda la punta del brazo en el espacio? Entra un vector de ángulos `q = [q1…q6]` y sale una posición `(x, y, z)` y una orientación.
+
+El ítem no es solo un ejercicio de cinemática. La FK es la base de los otros tres ítems:
+
+- **Ítem 2 (broker):** la FK hace de portero. En `goal_callback` calculas la FK del objetivo y, si cae fuera del workspace, se rechaza en el acto con el motivo.
+- **Ítem 4 (auditoría):** el firmware del robot resuelve la cinemática inversa con `send_coords()`. Tu FK sirve para comprobar si el robot llegó de verdad donde se le pidió.
+
+Si tu FK está mal, el portero rechaza goals válidos o deja pasar goals inválidos, y la auditoría del Ítem 4 no mide nada confiable. Por eso el enunciado exige validarla en el robot real antes de seguir.
+
+## 2. La tabla DH
+
+DH describe un brazo con solo 4 números por articulación:
+
+- **θ (theta):** el ángulo de giro de la articulación. Es la variable, `qi` más un offset.
+- **d:** cuánto se desplaza el eslabón a lo largo del eje de giro.
+- **a:** la longitud del eslabón.
+- **α (alfa):** cuánto se tuerce el eje de una articulación respecto al de la siguiente.
+
+Cada fila de la tabla genera una matriz 4×4 (transformación homogénea) que mueve un sistema de coordenadas de una articulación a la siguiente. Multiplicando las 6 matrices en orden obtienes la posición de la punta respecto a la base:
+
+`T₆⁰ = T₁ · T₂ · T₃ · T₄ · T₅ · T₆`
+
+Tus cotas del manual dan esto:
+
+| i | θi | di (mm) | ai (mm) | αi |
+|---|----|---------|---------|----|
+| 1 | q1 | 134.75 | 0 | +90° |
+| 2 | q2 − 90° | 0 | −110 | 0° |
+| 3 | q3 | 0 | −96 | 0° |
+| 4 | q4 − 90° | 63.4 | 0 | +90° |
+| 5 | q5 + 90° | 75.05 | 0 | −90° |
+| 6 | q6 | 45.6* | 0 | 0° |
+
+Los **offsets** (−90°, +90°) no son geometría. Corrigen la diferencia entre lo que el motor llama "0°" y lo que el modelo matemático llama "0°". Sin ellos, la pose `q = 0` del robot real no coincidiría con la del modelo.
+
+Con `q = 0` la FK da `(45.6, −63.4, 415.8)` mm. La altura 415.8 es 134.75 + 110 + 96 + 75.05, y cuadra con las cotas de tu plano.
+
+## 3. Qué generé
+
+### `kinematics.py`: la librería de cinemática
+
+No depende de ROS, solo de `numpy`. Contiene:
+
+- **La tabla DH** como datos (`JETCOBOT_DH`) y los **límites articulares** (`JOINT_LIMITS_DEG`).
+- **`dh_transform(theta, d, a, alpha)`:** construye la matriz 4×4 de una articulación.
+- **`fk(q)`:** recibe 6 ángulos en radianes y devuelve la matriz 4×4 del efector final. Multiplica las 6 matrices en orden. Es la función que pide la rúbrica.
+- **`fk_pose(q)`:** devuelve `(x, y, z, roll, pitch, yaw)` con mm y grados, más cómodo de leer y de comparar con lo que reporta pymycobot.
+- **`fk_all_joints(q)`:** devuelve la posición de cada articulación. Queda para uso futuro.
+- **`dentro_de_limites_articulares(q_deg)`:** dice si algún ángulo excede su rango y cuál. El Ítem 2 la reutiliza tal cual.
+
+Se mantuvo sin ROS a propósito, para poder importarla desde el broker (Ítem 2) y desde el auditor (Ítem 4) y probarla sin levantar ningún nodo.
+
+### `verificar_fk.py`: el script de evidencia
+
+Automatiza el procedimiento que exige la rúbrica, en este orden:
+
+1. **Predicción:** calcula `fk(q)` para la pose elegida.
+2. **Sellado:** escribe esa predicción con fecha y hora en `evidencia_fk.csv` antes de pedir ningún dato medido. Eso deja constancia de que la predicción existía antes de la medición.
+3. **Medición:** tú mueves el brazo a esa pose, mides con regla o calibre y escribes x, y, z.
+4. **Veredicto:** calcula el error (distancia 3D entre lo predicho y lo medido) y lo compara con 10 mm. Marca APROBADO o RECHAZADO en el CSV.
+
+Se usa así, una vez por pose:
+
+```bash
+python3 verificar_fk.py --label pose1 --q-deg 0 -30 30 0 45 0
+python3 verificar_fk.py --resumen     # ver el estado de las 3 poses
+```
+
+### `JetCobot_DH_Analisis_completo.pptx`
+
+Tu plantilla con la tabla DH llena, la pose de referencia (`q = 0°`), las cotas usadas y el aviso sobre d6.
+
+## 4. Lo que te toca hacer
+
+El código solo calcula. La verificación necesita el robot y tus manos:
+
+1. **Elige 3 poses distintas** dentro de los límites, fáciles de medir, y con la punta lejos de la base y de la mesa. Las que puse como ejemplo eran arbitrarias; cámbialas por las tuyas.
+2. **Declara la predicción** con `verificar_fk.py` antes de mover el brazo.
+3. **Mueve el robot** a esos ángulos, por ejemplo con `send_angles()` de pymycobot, y mide la posición real del efector.
+4. Si el error supera 10 mm, revisa **d6** primero (ver abajo), y luego las demás cotas.
+
+## 5. Pendientes y advertencias
+
+- **d6 = 45.6 mm** no está en tu manual. Salió del GitBook oficial. Mídelo en tu robot: es el dato más probable de causar error, sobre todo si usas gripper (el efector real queda más lejos de la brida).
+- **Límites de J2 a J6:** usé los del GitBook (±165°, y ±175° en J6). Tu manual solo confirma J1 en ±160°.
+- **Eje de referencia al medir:** las coordenadas de `fk` están en el sistema de la base del robot. Al medir con regla, ubica el origen en el eje de J1, a la altura de la base, o tu error será de sistema de referencia y no de la FK.
+- **Entregable relacionado:** el enunciado pide un documento de diseño con la tabla DH, firmado antes de ejecutar las mediciones. Tu PPTX puede servir de base.
+
+Cuando tengas las 3 poses aprobadas, seguimos con el Ítem 2, donde esta FK pasa a ser el portero del broker.
