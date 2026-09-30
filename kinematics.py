@@ -34,7 +34,6 @@ NUM_JOINTS = len(JETCOBOT_DH)  # = 6, usado para validar longitud de q en todas 
 def dh_transform(theta: float, d: float, a: float, alpha: float) -> np.ndarray:
     ct, st = math.cos(theta), math.sin(theta)  # Cachear cos/sin evita recomputarlos 2 veces cada uno
     ca, sa = math.cos(alpha), math.sin(alpha)
-
     return np.array([
         [ct, -st * ca,  st * sa, a * ct],
         [st,  ct * ca, -ct * sa, a * st],
@@ -77,7 +76,6 @@ def pose_from_matrix(T: np.ndarray) -> Tuple[float, float, float, float, float, 
     R = T[:3, :3]  # Submatriz de rotación 3x3
     sy = math.sqrt(R[0, 0] ** 2 + R[1, 0] ** 2)
     singular = sy < 1e-6
-
     if not singular:
         roll = math.atan2(R[2, 1], R[2, 2])
         pitch = math.atan2(-R[2, 0], sy)
@@ -87,7 +85,6 @@ def pose_from_matrix(T: np.ndarray) -> Tuple[float, float, float, float, float, 
         roll = math.atan2(-R[1, 2], R[1, 1])
         pitch = math.atan2(-R[2, 0], sy)
         yaw = 0.0
-
     return (
         float(x), float(y), float(z),
         math.degrees(roll), math.degrees(pitch), math.degrees(yaw),
