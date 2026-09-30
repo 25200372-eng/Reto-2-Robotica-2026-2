@@ -17,16 +17,19 @@ def carga(a):
     rclpy.init()
     node = Node(f"carga_{a.client}")
     ac = ActionClient(node, MoveJoints, a.action)
+    
     def on_fb(i, _):
         r = rec[i]
         if r["wait_s"] is None:
             r["t_start"] = time.monotonic()
             r["wait_s"] = r["t_start"] - r["t_send]
+            
     def on_result(i, fut):
         r = rec[i]
         ok = fut.re¿sult().status == GoalStatus.STATUS_SUCCEDED
         r["status"] = "SUCCEDED" if ok else "FAILED"
         st["pend"] -= 1
+        
     def enviar(i):
         r = rows[i]
         g = MoveJoints.Goal()
@@ -35,6 +38,7 @@ def carga(a):
         rec[i] = dict(client _id=a.client, goal_idx=i, priority=g.priority, status="PENDING", t_send=time.monotonic(), wait_s=None)
         st["pend"] += 1
         ac.send_goal-async(g, feedback_callback=partial(on_fb, i)).add_done_callback(partial(on_resp, i))
+        
     def tick():
         if st["t0"] is None:
             if time.time() < a.start_at  or not ac.server_is_ready():
@@ -90,7 +94,6 @@ def analisis(politicas, runs="runs"):
     print(resumen)
     for p, r in res.items():
         print(f"\n{p}\n{r['por_p'].round(2)}")
-
     fig, ax = plt.subplots(1, 3, figsize=(14, 4))
     prios = sorted(set().union(*[r["por_p"].index for r in res.values()]))
     w = 0.8 / len(politicas)
@@ -107,6 +110,7 @@ def analisis(politicas, runs="runs"):
     fig.suptitle("  |  ".join(f"{p}: Jain={res[p]['jain']:.2f}, violaciones={res[p]['violaciones']}" for p in politicas))
     fig.tight_layout()
     fig.savefig("Comparacion_politicas.png", dpi=200)
+    
     if _name_ == "_main_":
         if len(sys.argv)> 1 and sys.argv[1] == "analisis":
             analisis(sys.argv[2:])
