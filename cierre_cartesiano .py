@@ -1,20 +1,4 @@
 #!/usr/bin/env python3
-"""Ítem 4 — cierre cartesiano: send_coords() auditado con FK propia.
-
-Manda UN objetivo (x, y, z) sobre el tablero, resuelto por el firmware
-(pymycobot.send_coords: la cinemática inversa la resuelve el firmware,
-nosotros no escribimos solver). Lee el vector articular q que el brazo
-REALMENTE ejecutó, calcula FK(q) con la tabla DH del equipo (ítem 1) y
-mide el error contra lo pedido.
-
-Se corre EN EL JETSON, con el puerto serie libre (sin sync_plan_nx
-corriendo) — igual que herramientas/verificar_fk.py.
-
-    python3 cierre_cartesiano.py --x 150 --y 0 --z 130
-
-Mantiene la orientación actual del efector (rx, ry, rz) y solo cambia la
-posición, para no depender de adivinar una orientación alcanzable.
-"""
 import argparse
 import math
 import os
