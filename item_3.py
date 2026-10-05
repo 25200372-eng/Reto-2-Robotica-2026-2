@@ -35,7 +35,7 @@ def carga(a):
         r = rows[i]
         g = MoveJoints.Goal()
         g.client_id, g.priority = a.client, int (r["priority"])
-        g.target = [float(r[f"j{k}"])] for k in range (1, 7)
+        g.target = [float(r[f"j{k}"]) for k in range (1, 7)]
         rec[i] = dict(client_id=a.client, goal_idx=i, priority=g.priority, status="PENDING", t_send=time.monotonic(), wait_s=None)
         st["pend"] += 1
         ac.send_goal_async(g, feedback_callback=partial(on_fb, i)).add_done_callback(partial(on_resp, i))
