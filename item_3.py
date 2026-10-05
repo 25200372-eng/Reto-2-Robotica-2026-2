@@ -54,6 +54,11 @@ def carga(a):
                 return
             st["t0"] = time.monotonic()
         t = time.monotonic() - st["t0"]
+        if st["t0"] is None:
+            print("ERROR: el servidor de accion del arm_broker no respondio; no se midio nada.")
+            node.destroy_node()
+            rclp.shutdown()
+            sys.exit(1)
         while st["sent"] < len(rows) and t >= float(rows[st["sent"]]["t_offset_s"]):
             enviar(st["sent"])
             st["sent"] += 1
@@ -89,6 +94,8 @@ def analisis(politicas, runs="runs"):
     res ={}
     for pol in politicas:
         df = pd.concat(pd.read_csv(f) for f in sorted(glob.glob(f"{runs}/{pol}/client_*.csv")))
+        if df.empty:
+            raise SystemExit(f"Sin datos en {runs}/{pol}: ¿corrió el broker?")
         ok = df[df.status == "SUCCEEDED"]
         por_p = ok.groupby("priority").wait_s.agg(mean="mean", p95=lambda s: s.quantile(0.95), max= "max")
         x = ok.groupby("client_id").size().reindex(df.client_id.unique(), fill_value=0).astype(float)
