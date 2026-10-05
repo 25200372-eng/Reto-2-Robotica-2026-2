@@ -18,19 +18,16 @@ def carga(a):
     rclpy.init()
     node = Node(f"carga_{a.client}")
     ac = ActionClient(node, MoveJoints, a.action)
-    
     def on_fb(i, _):
         r = rec[i]
         if r["wait_s"] is None:
             r["t_start"] = time.monotonic()
-            r["wait_s"] = r["t_start"] - r["t_send"]
-            
+            r["wait_s"] = r["t_start"] - r["t_send"]  
     def on_result(i, fut):
         r = rec[i]
         ok = fut.result().status == GoalStatus.STATUS_SUCCEEDED
         r["status"] = "SUCCEEDED" if ok else "FAILED"
         st["pend"] -= 1
-        
     def enviar(i):
         r = rows[i]
         g = MoveJoints.Goal()
@@ -39,7 +36,6 @@ def carga(a):
         rec[i] = dict(client_id=a.client, goal_idx=i, priority=g.priority, status="PENDING", t_send=time.monotonic(), wait_s=None)
         st["pend"] += 1
         ac.send_goal_async(g, feedback_callback=partial(on_fb, i)).add_done_callback(partial(on_resp, i))
-
     def on_resp(i, fut):
         gh = fut.result()
         if not gh.accepted:
@@ -47,7 +43,6 @@ def carga(a):
             st["pend"] -= 1
             return
         gh.get_result_async().add_done_callback(partial(on_result, i))
-        
     def tick():
         if st["t0"] is None:
             if time.time() < a.start_at  or not ac.server_is_ready():
