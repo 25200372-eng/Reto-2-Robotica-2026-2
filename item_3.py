@@ -11,14 +11,13 @@ def carga(a):
     from action_msgs.msg import GoalStatus
     from rclpy.action import ActionClient
     from rclpy.node import Node
-    from arm_broker_inferfaces.action import MoveJoints
+    from arm_broker_interfaces.action import MoveJoints
     rows = [r for r in csv.DictReader(open(a.trace)) if r["client"] == a.client]
     rec, pubs = {}, []
     st = {"t0": None, "sent": 0, "pend": 0}
     rclpy.init()
     node = Node(f"carga_{a.client}")
     ac = ActionClient(node, MoveJoints, a.action)
-    p.add_argument("--action", default="/arm/move_joints")
     
     def on_fb(i, _):
         r = rec[i]
@@ -36,7 +35,7 @@ def carga(a):
         r = rows[i]
         g = MoveJoints.Goal()
         g.client_id, g.priority = a.client, int (r["priority"])
-        g.target = [float(r[f"j{k}"]) for k in range (1, 7)
+        g.target = [float(r[f"j{k}"])] for k in range (1, 7)
         rec[i] = dict(client_id=a.client, goal_idx=i, priority=g.priority, status="PENDING", t_send=time.monotonic(), wait_s=None)
         st["pend"] += 1
         ac.send_goal_async(g, feedback_callback=partial(on_fb, i)).add_done_callback(partial(on_resp, i))
@@ -126,6 +125,7 @@ if __name__ == "__main__":
         analisis(sys.argv[2:])
     elif len(sys.argv) >1 and sys.argv[1] == "carga":
         p = argparse.ArgumentParser()
+        p.add_argument("--action", default="/arm/move_joints")
         p.add_argument("modo")
         p.add_argument("--client", required=True)
         p.add_argument("--trace", required=True)
@@ -135,4 +135,4 @@ if __name__ == "__main__":
         p.add_argument("--timeout", type=float, default=900.0)
         carga(p.parse_args())
     else:
-        print(None)
+        print("uso: script.py carga --client C --trace T --out O | script.py analisis pol1 pol2")
