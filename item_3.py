@@ -11,33 +11,43 @@ def carga(a):
     from action_msgs.msg import GoalStatus
     from rclpy.action import ActionClient
     from rclpy.node import Node
-    rows = [r for r in cvs.DictReader(open(a.trace)) if r["client"] == a.client]
+    from arm_broker_inferfaces.action import MoveJoints
+    rows = [r for r in csv.DictReader(open(a.trace)) if r["client"] == a.client]
     rec, pubs = {}, []
     st = {"t0": None, "sent": 0, "pend": 0}
     rclpy.init()
     node = Node(f"carga_{a.client}")
     ac = ActionClient(node, MoveJoints, a.action)
+    p.add_argument("--action", default="/arm/move_joints")
     
     def on_fb(i, _):
         r = rec[i]
         if r["wait_s"] is None:
             r["t_start"] = time.monotonic()
-            r["wait_s"] = r["t_start"] - r["t_send]
+            r["wait_s"] = r["t_start"] - r["t_send"]
             
     def on_result(i, fut):
         r = rec[i]
-        ok = fut.re¿sult().status == GoalStatus.STATUS_SUCCEDED
-        r["status"] = "SUCCEDED" if ok else "FAILED"
+        ok = fut.result().status == GoalStatus.STATUS_SUCCEEDED
+        r["status"] = "SUCCEEDED" if ok else "FAILED"
         st["pend"] -= 1
         
     def enviar(i):
         r = rows[i]
         g = MoveJoints.Goal()
         g.client_id, g.priority = a.client, int (r["priority"])
-        g.target = [float(r[f"j{k}"]= for k in range (1, 7)]
-        rec[i] = dict(client _id=a.client, goal_idx=i, priority=g.priority, status="PENDING", t_send=time.monotonic(), wait_s=None)
+        g.target = [float(r[f"j{k}"]) for k in range (1, 7)
+        rec[i] = dict(client_id=a.client, goal_idx=i, priority=g.priority, status="PENDING", t_send=time.monotonic(), wait_s=None)
         st["pend"] += 1
-        ac.send_goal-async(g, feedback_callback=partial(on_fb, i)).add_done_callback(partial(on_resp, i))
+        ac.send_goal_async(g, feedback_callback=partial(on_fb, i)).add_done_callback(partial(on_resp, i))
+
+    def on_resp(i, fut):
+        gh = fut.result()
+        if not gh.accepted:
+            rec[i]["status"] = "REJECTED"
+            st["pend"] -= 1
+            return
+        gh.get_result_async().add_done_callback(partial(on_result, i))
         
     def tick():
         if st["t0"] is None:
@@ -59,14 +69,14 @@ def carga(a):
     os.makedirs(a.out, exist_ok=True)
     cols = ["client_id", "goal_idx", "priority", "status", "wait_s"]
     with open(f"{a.out}/client_{a.client}.csv", "w", newline="") as f:
-        w = csv.ictWriter(f, cols, extrasaction="ignore")
+        w = csv.DictWriter(f, cols, extrasaction="ignore")
         w.writeheader()
         w.writerows(rec.values())
     if a.monitor:
         with open(f"{a.out}/publishers.csv", "w", newline="") as f:
             w = csv.writer(f)
             w.writerow(["t_unix", "n_publishers"])
-            w.writerows(pubs)}
+            w.writerows(pubs)
     print(f"{len(rec)} goals guardados en {a.out}")
     node.destroy_node()
     rclpy.shutdown()
@@ -74,21 +84,21 @@ def carga(a):
 def analisis(politicas, runs="runs"):
     import matplotlib
     matplotlib.use("AGG")
-    import matplot.pyplot as plt
+    import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     res ={}
     for pol in politicas:
-        df = pd.concat(pd.read_csv(f) for f in sort(glob.glob(f"{runs}/{pol}/client_*.cs")))
+        df = pd.concat(pd.read_csv(f) for f in sorted(glob.glob(f"{runs}/{pol}/client_*.csv")))
         ok = df[df.status == "SUCCEEDED"]
-        por_p = ok.groupby("priority").wait_s.agg(mean="mean", p95=lambda s: s.quantile(0.95), max="max"
+        por_p = ok.groupby("priority").wait_s.agg(mean="mean", p95=lambda s: s.quantile(0.95), max= "max")
         x = ok.groupby("client_id").size().reindex(df.client_id.unique(), fill_value=0).astype(float)
         jain = x.sum() ** 2 / (len(x) * (x ** 2).sum())
         try:
-            viol = int((pd.read_csv(f"{runs}/{pod}/publishers.csv").n_publishers > 1).sum())
+            viol = int((pd.read_csv(f"{runs}/{pol}/publishers.csv").n_publishers > 1).sum())
         except FileNotFoundError:
             viol = None
-            res[pol] = dict(por_p=por_p, inanicion_s=por_p["max"].iloc[-1], jain=jain, rechazados=int((df.status == "REJECTED").sum()), violaciones=viol)
+        res[pol] = dict(por_p=por_p, inanicion_s=por_p["max"].iloc[-1], jain=jain, rechazados=int((df.status == "REJECTED").sum()), violaciones=viol)
     resumen = pd.DataFrame({p: {k: v for k, v in r.items() if k != "por_p"} for p, r in res.items()}).T
     resumen.to_csv("resumen_metricas.csv")
     print(resumen)
@@ -111,18 +121,18 @@ def analisis(politicas, runs="runs"):
     fig.tight_layout()
     fig.savefig("Comparacion_politicas.png", dpi=200)
     
-    if _name_ == "_main_":
-        if len(sys.argv)> 1 and sys.argv[1] == "analisis":
-            analisis(sys.argv[2:])
-        elif len(sys.argv) >1 and sys.argv[1] == "carga":
-            p = argparse.ArgumentParser()
-            p.add_argument("modo")
-            p.add_argument("--client", required=True)
-            p.add_argument("--trace", required=True)
-            p.add_argument("--out", required=True)
-            p.add_argument("--start-at", type=float, default=0.0)
-            p.add_argument("--monitor", action="store_true")
-            p.add_argument("--timeout", type=float, default=900.0)
-            carga(p.parse_args())
-        else:
-            print(__doc__)
+if __name__ == "__main__":
+    if len(sys.argv)> 1 and sys.argv[1] == "analisis":
+        analisis(sys.argv[2:])
+    elif len(sys.argv) >1 and sys.argv[1] == "carga":
+        p = argparse.ArgumentParser()
+        p.add_argument("modo")
+        p.add_argument("--client", required=True)
+        p.add_argument("--trace", required=True)
+        p.add_argument("--out", required=True)
+        p.add_argument("--start-at", type=float, default=0.0)
+        p.add_argument("--monitor", action="store_true")
+        p.add_argument("--timeout", type=float, default=900.0)
+        carga(p.parse_args())
+    else:
+        print(None)
